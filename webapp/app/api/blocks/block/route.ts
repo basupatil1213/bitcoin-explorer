@@ -9,7 +9,7 @@ export async function getBlockDetails() {
     let blockHeight;
     try {
         await pool.connect();
-        blockHeight = await pool.query("SELECT * FROM blocks ORDER BY id DESC LIMIT 1");
+        blockHeight = await pool.query("select * from blocks order by id desc limit 1");
     } catch (error : unknown) {
         return NextResponse.json({ message: error instanceof Error ? error.message : 'Unknown error' }, { status: 500 });
     }
