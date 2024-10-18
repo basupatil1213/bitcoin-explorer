@@ -13,7 +13,7 @@ export async function getBlockDetails() {
         await pool.connect();
         console.log(`hello`);
         
-        const query = `SELECT Id, height, hash, latest_url, previous_hash, previous_url, peer_count, high_fee_per_kb, medium_fee_per_kb, low_fee_per_kb, price, timestamp    time FROM blocks limit 1`;
+        const query = `SELECT Id, height, hash, latest_url, previous_hash, previous_url, peer_count, high_fee_per_kb, medium_fee_per_kb, low_fee_per_kb, price, timestamp, time FROM blocks ORDER BY time DESC`;
         blockHeight = await pool.query(query);
         console.log(`value: \n ${JSON.stringify(blockHeight.rows)}`);
     } catch (error : unknown) {
