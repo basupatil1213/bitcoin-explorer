@@ -12,3 +12,6 @@ serde_json = "1.0.129"
 tokio-postgres = { version = "0.7.12", features = ["with-chrono-0_4"] }
 dotenv = "0.15.0"
 dotenv_codegen = "0.15.0"
+futures = "0.3.31"
+routerify = "3"
+routerify-json-response = "3"

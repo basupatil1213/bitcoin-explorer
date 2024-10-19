@@ -1,181 +1,260 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import {
-    ArrowRight,
-    Clock,
-    Database,
-    Link,
-    Users,
-    Menu,
-    ChevronDown,
-    ChevronUp,
-} from "lucide-react";
+import { Sun, Moon, ArrowRight } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
-import { Line, LineChart, ResponsiveContainer, XAxis, YAxis } from "recharts";
+import axios from "axios";
+import { Line } from "react-chartjs-2";
 import {
-    ChartContainer,
-    ChartTooltip,
-    ChartTooltipContent,
-} from "@/components/ui/chart";
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend,
+} from "chart.js";
+
+// Register Chart.js components for usage
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend
+);
+
+// Define the structure of the CoinGecko API response for chart data
+interface CoinGeckoPriceResponse {
+  prices: number[][];
+}
+
+// Define the structure of the CoinGecko API response for off-chain data
+interface CoinGeckoDataResponse {
+  market_data: {
+    market_cap: {
+      usd: number;
+    };
+    total_volume: {
+      usd: number;
+    };
+    price_change_percentage_24h: number;
+    price_change_percentage_7d: number;
+    circulating_supply: number;
+    market_cap_change_percentage_24h: number;
+    market_cap_rank: number;
+    market_cap_dominance: number;
+    ath: {
+      usd: number;
+    };
+  };
+}
+
+// Define the state for chart data
+interface ChartData {
+  labels: string[];
+  datasets: {
+    label: string;
+    data: number[];
+    borderColor: string;
+    fill: boolean;
+    tension: number;
+  }[];
+}
 
 type Transaction = {
-    id: string;
-    from: string;
-    to: string;
-    amount: number;
-    fee: number;
+  id: string;
+  from: string;
+  to: string;
+  amount: number;
+  fee: number;
 };
-
-
 
 type BlockData = {
-    id: number;
-    height: string;
-    hash: string;
-    latest_url: string;
-    previous_hash: string;
-    previous_url: string;
-    peer_count: string;
-    high_fee_per_kb: string;
-    medium_fee_per_kb: string;
-    low_fee_per_kb: string;
-    price: number;
-    time: string;
-    transactions?: Transaction[];
+  id: number;
+  height: string;
+  hash: string;
+  latest_url: string;
+  previous_hash: string;
+  previous_url: string;
+  peer_count: string;
+  high_fee_per_kb: string;
+  medium_fee_per_kb: string;
+  low_fee_per_kb: string;
+  time: string;
+  last_fork_height: string;
+  timestamp: string;
 };
 
-// Mock data for demonstration
-const mockBlocks: BlockData[] = Array.from({ length: 10 }, (_, i) => ({
-    id: 10 - i,
-    height: `${1000000 - i}`,
-    hash: `0x${Math.random().toString(16).substr(2, 64)}`,
-    latest_url: "#",
-    previous_hash: `0x${Math.random().toString(16).substr(2, 64)}`,
-    previous_url: "#",
-    peer_count: `${Math.floor(Math.random() * 1000)}`,
-    high_fee_per_kb: `${Math.floor(Math.random() * 100)}`,
-    medium_fee_per_kb: `${Math.floor(Math.random() * 50)}`,
-    low_fee_per_kb: `${Math.floor(Math.random() * 25)}`,
-    price: Math.random() * 10000 + 30000,
-    time: new Date(Date.now() - i * 600000).toISOString(),
-    transactions: Array.from({ length: 5 }, (_, j) => ({
-        id: `0x${Math.random().toString(16).substr(2, 64)}`,
-        from: `0x${Math.random().toString(16).substr(2, 40)}`,
-        to: `0x${Math.random().toString(16).substr(2, 40)}`,
-        amount: Math.random() * 10,
-        fee: Math.random() * 0.1,
-    })),
-}));
-
-// Generate mock price change data
-const mockPriceChangeData = mockBlocks
-    .map((block, index) => ({
-        time: new Date(block.time).toLocaleTimeString(),
-        price: block.price,
-        change:
-            index === 0
-                ? 0
-                : ((block.price - mockBlocks[index - 1].price) /
-                      mockBlocks[index - 1].price) *
-                  100,
-    }))
-    .reverse();
-
 export default function BlockchainExplorer() {
-    const [recentBlocks, setRecentBlocks] = useState<BlockData[] | undefined>(
-        undefined
-    );
-    const [selectedBlock, setSelectedBlock] = useState<BlockData | undefined>(
-        undefined
-    );
-    const [expandedTransactions, setExpandedTransactions] = useState<string[]>(
-        []
-    );
+  const [recentBlocks, setRecentBlocks] = useState<BlockData[] | undefined>(
+    undefined
+  );
+  const [selectedBlock, setSelectedBlock] = useState<string | undefined>(
+    undefined
+  );
+  const [selectedBlockDetails, setSelectedBlockDetails] = useState<
+    BlockData | undefined
+  >(undefined);
 
-    const handleBlockClick = (block: BlockData) => {
-        setSelectedBlock(block);
-        setExpandedTransactions([]);
+  const [chartData, setChartData] = useState<ChartData | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+
+  // Off-chain data state
+  const [marketCap, setMarketCap] = useState<number | null>(null);
+  const [tradingVolume, setTradingVolume] = useState<number | null>(null);
+  const [priceChange24h, setPriceChange24h] = useState<number | null>(null);
+  const [priceChange7d, setPriceChange7d] = useState<number | null>(null);
+  const [circulatingSupply, setCirculatingSupply] = useState<number | null>(
+    null
+  );
+  const [marketDominance, setMarketDominance] = useState<number | null>(null);
+  const [allTimeHigh, setAllTimeHigh] = useState<number | null>(null);
+
+  const [darkMode, setDarkMode] = useState<boolean>(true);
+
+  const handleBlockClick = (block: BlockData) => {
+    setSelectedBlock(block.hash);
+    if (selectedBlock != undefined) {
+      fetchBlockDetails(selectedBlock);
+    }
+  };
+
+  const fetchBlockDetails = async (hash: string) => {
+    try {
+      const response = await fetch(
+        `http://localhost:3000/api/blocks/block?hash=${encodeURIComponent(
+          hash
+        )}`,
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
+      if (!response.ok) {
+        throw new Error("Network response was not ok");
+      }
+      const data = await response.json();
+      setSelectedBlockDetails(data.data);
+    } catch (error) {
+      console.error("Error fetching block details:", error);
+    }
+  };
+
+  useEffect(() => {
+    const fetchBlockHeight = () => {
+      fetch("http://localhost:3000/api/blocks")
+        .then((response) => response.json())
+        .then((data) => {
+          setRecentBlocks(data.message);
+          setSelectedBlock(data.message[0].hash);
+        });
     };
 
-    const toggleTransaction = (transactionId: string) => {
-        setExpandedTransactions((prev) =>
-            prev.includes(transactionId)
-                ? prev.filter((id) => id !== transactionId)
-                : [...prev, transactionId]
+    const fetchCoinData = async () => {
+      try {
+        // Fetch chart data for Bitcoin prices over the last 30 days
+        const priceResponse = await axios.get<CoinGeckoPriceResponse>(
+          "https://api.coingecko.com/api/v3/coins/bitcoin/market_chart",
+          {
+            params: {
+              vs_currency: "usd",
+              days: 30,
+            },
+          }
         );
+
+        const prices = priceResponse.data.prices;
+        const labels = prices.map((price: number[]) => {
+          const date = new Date(price[0]);
+          return date.toLocaleDateString();
+        });
+        const data = prices.map((price: number[]) => price[1]);
+
+        setChartData({
+          labels,
+          datasets: [
+            {
+              label: "Bitcoin Price (USD)",
+              data,
+              borderColor: "rgba(75, 192, 192, 1)",
+              fill: false,
+              tension: 0.1,
+            },
+          ],
+        });
+
+        // Fetch off-chain data for Bitcoin market cap, volume, and price changes
+        const offChainResponse = await axios.get<CoinGeckoDataResponse>(
+          "https://api.coingecko.com/api/v3/coins/bitcoin"
+        );
+
+        const offChainData = offChainResponse.data.market_data;
+        setMarketCap(offChainData.market_cap.usd);
+        setTradingVolume(offChainData.total_volume.usd);
+        setPriceChange24h(offChainData.price_change_percentage_24h);
+        setPriceChange7d(offChainData.price_change_percentage_7d);
+        setCirculatingSupply(offChainData.circulating_supply);
+        setMarketDominance(offChainData.market_cap_dominance);
+        setAllTimeHigh(offChainData.ath.usd);
+
+        setLoading(false);
+      } catch (error) {
+        console.error("Error fetching coin data:", error);
+        setLoading(false);
+      }
     };
 
-    useEffect(() => {
-        const fetchBlockHeight = () => {
-            fetch("http://localhost:3000/api/blocks")
-                .then((response) => response.json())
-                .then((data) => {
-                    setRecentBlocks(data.message);
-                    setSelectedBlock(data.message[0]);
-                });
-        };
+    fetchBlockHeight();
+    fetchCoinData();
+  }, []);
 
-        fetchBlockHeight();
-    });
+  useEffect(() => {
+    if (selectedBlock != undefined) {
+      fetchBlockDetails(selectedBlock);
+    }
+  }, [selectedBlock]);
 
-    return (
-        <div className="min-h-screen bg-gray-900 text-gray-100">
-            <header className="bg-gray-800 border-b border-gray-700 sticky top-0 z-10">
-                <div className="container mx-auto px-4 py-4 flex justify-between items-center">
-                    <h1 className="text-2xl font-bold text-blue-400">
-                        BlockChain Explorer
-                    </h1>
-                    <nav>
-                        <ul className="flex space-x-4">
-                            <li>
-                                <a
-                                    href="#"
-                                    className="text-gray-300 hover:text-blue-400">
-                                    Home
-                                </a>
-                            </li>
-                            <li>
-                                <a
-                                    href="#"
-                                    className="text-gray-300 hover:text-blue-400">
-                                    Blocks
-                                </a>
-                            </li>
-                            <li>
-                                <a
-                                    href="#"
-                                    className="text-gray-300 hover:text-blue-400">
-                                    Transactions
-                                </a>
-                            </li>
-                            <li>
-                                <a
-                                    href="#"
-                                    className="text-gray-300 hover:text-blue-400">
-                                    About
-                                </a>
-                            </li>
-                        </ul>
-                    </nav>
-                    <Button variant="ghost" size="icon">
-                        <Menu className="h-6 w-6" />
-                    </Button>
-                </div>
-            </header>
+  const toggleDarkMode = () => {
+    setDarkMode((prevMode) => !prevMode);
+  };
 
-            <main className="container mx-auto px-4 py-8 space-y-8">
-                {/* Chain Visualization */}
-                <Card className="bg-gray-800 border-gray-700">
-                    <CardHeader>
-                        <CardTitle className="text-xl text-blue-400">
-                            Latest 10 Blocks
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <ScrollArea className="w-full whitespace-nowrap rounded-md border border-gray-700">
+  return (
+    <div className={`${darkMode ? "bg-gray-900 text-gray-100" : "bg-white text-gray-900"} min-h-screen`}>
+      <header className={`${darkMode ? "bg-gray-800" : "bg-gray-100"} border-b border-gray-700 sticky top-0 z-10`}>
+        <div className="container mx-auto px-4 py-4 flex justify-between items-center">
+          <h1 className="text-2xl font-bold text-blue-400">BlockChain Explorer</h1>
+          <nav>
+            <ul className="flex space-x-4">
+              <li>
+                <a href="#" className={`${darkMode ? "text-gray-300 hover:text-blue-400" : "text-gray-800 hover:text-blue-600"}`}>Home</a>
+              </li>
+              <li>
+                <a href="#" className={`${darkMode ? "text-gray-300 hover:text-blue-400" : "text-gray-800 hover:text-blue-600"}`}>Blocks</a>
+              </li>
+              <li>
+                <a href="#" className={`${darkMode ? "text-gray-300 hover:text-blue-400" : "text-gray-800 hover:text-blue-600"}`}>Transactions</a>
+              </li>
+              <li>
+                <a href="#" className={`${darkMode ? "text-gray-300 hover:text-blue-400" : "text-gray-800 hover:text-blue-600"}`}>About</a>
+              </li>
+            </ul>
+          </nav>
+          <Button variant="ghost" size="icon" onClick={toggleDarkMode}>
+            {darkMode ? <Sun className="h-6 w-6 text-yellow-400" /> : <Moon className="h-6 w-6 text-blue-800" />}
+          </Button>
+        </div>
+      </header>
+
+      <main className="container mx-auto px-4 py-8">
+      <ScrollArea className="w-full whitespace-nowrap rounded-md border border-gray-700">
                             <div className="flex p-4">
                                 {recentBlocks &&
                                     recentBlocks.map((block, index) => (
@@ -187,12 +266,12 @@ export default function BlockchainExplorer() {
                                                 }>
                                                 <div
                                                     className={`w-20 h-20 border-2 rounded-lg flex items-center justify-center ${
-                                                        selectedBlock &&
-                                                        selectedBlock.id ===
-                                                            block.id
-                                                            ? "bg-blue-500/30 border-blue-500"
-                                                            : "bg-blue-500/10 border-blue-500/50"
-                                                    }`}>
+                                                      selectedBlockDetails &&
+                                                      selectedBlockDetails.id ===
+                                                          block.id
+                                                          ? "bg-blue-500/30 border-blue-500"
+                                                          : "bg-blue-500/10 border-blue-500/50"
+                                                  }`}>
                                                     <span className="text-sm font-medium text-blue-400">
                                                         {block.height}
                                                     </span>
@@ -203,352 +282,78 @@ export default function BlockchainExplorer() {
                                                     ).toLocaleTimeString()}
                                                 </span>
                                             </div>
-                                            {index < mockBlocks.length - 1 && (
-                                                <ArrowRight className="mx-2 self-center text-gray-600" />
-                                            )}
+                                            {recentBlocks &&
+                                                index <
+                                                    recentBlocks.length - 1 && (
+                                                    <ArrowRight className="mx-2 self-center text-gray-600" />
+                                                )}
                                         </React.Fragment>
                                     ))}
                             </div>
                             <ScrollBar orientation="horizontal" />
                         </ScrollArea>
-                    </CardContent>
-                </Card>
 
-                
+        {/* Block Details Section */}
+        {selectedBlockDetails && (
+          <Card className="mt-8 bg-gray-800 border-gray-700 text-gray-200">
+            <CardHeader>
+              <CardTitle className="text-xl text-blue-400">Block Details</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p>Block Height: {selectedBlockDetails.height}</p>
+              <p>Block Hash: {selectedBlockDetails.hash}</p>
+              <p>Peer Count: {selectedBlockDetails.peer_count}</p>
+              <p>Last Fork Height: {selectedBlockDetails.last_fork_height}</p>
+              <p>Time: {new Date(selectedBlockDetails.time).toLocaleTimeString()}</p>
+              <p>High Fee per KB: {selectedBlockDetails.high_fee_per_kb}</p>
+              <p>Timestamp: {new Date(selectedBlockDetails.timestamp).toLocaleDateString()} : {new Date(selectedBlockDetails.timestamp).toLocaleTimeString()}</p>
+            </CardContent>
+          </Card>
+        )}
 
-                {/* Selected Block Details */}
-                <Card className="bg-gray-800 border-gray-700">
-                    <CardHeader>
-                        <CardTitle className="text-xl text-blue-400">
-                            Block Details
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        {selectedBlock && (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                    <p>
-                                        <strong className="text-gray-400">
-                                            Height:
-                                        </strong>{" "}
-                                        <span className="text-blue-300">
-                                            {selectedBlock.height}
-                                        </span>
-                                    </p>
-                                    <p>
-                                        <strong className="text-gray-400">
-                                            Hash:
-                                        </strong>{" "}
-                                        <span className="font-mono text-sm text-green-400">
-                                            {selectedBlock.hash}
-                                        </span>
-                                    </p>
-                                    <p>
-                                        <strong className="text-gray-400">
-                                            Previous Hash:
-                                        </strong>{" "}
-                                        <span className="font-mono text-sm text-green-400">
-                                            {selectedBlock.previous_hash}
-                                        </span>
-                                    </p>
-                                    <p>
-                                        <strong className="text-gray-400">
-                                            Time:
-                                        </strong>{" "}
-                                        <span className="text-blue-300">
-                                            {new Date(
-                                                selectedBlock.time
-                                            ).toLocaleString()}
-                                        </span>
-                                    </p>
-                                </div>
-                                <div className="space-y-2">
-                                    <p>
-                                        <strong className="text-gray-400">
-                                            Price:
-                                        </strong>{" "}
-                                        <span className="text-blue-300">
-                                            ${selectedBlock.price.toFixed(2)}
-                                        </span>
-                                    </p>
-                                    <p>
-                                        <strong className="text-gray-400">
-                                            Peer Count:
-                                        </strong>{" "}
-                                        <span className="text-blue-300">
-                                            {selectedBlock.peer_count}
-                                        </span>
-                                    </p>
-                                    <p>
-                                        <strong className="text-gray-400">
-                                            High Fee/KB:
-                                        </strong>{" "}
-                                        <span className="text-blue-300">
-                                            {selectedBlock.high_fee_per_kb}
-                                        </span>
-                                    </p>
-                                    <p>
-                                        <strong className="text-gray-400">
-                                            Medium Fee/KB:
-                                        </strong>{" "}
-                                        <span className="text-blue-300">
-                                            {selectedBlock.medium_fee_per_kb}
-                                        </span>
-                                    </p>
-                                    <p>
-                                        <strong className="text-gray-400">
-                                            Low Fee/KB:
-                                        </strong>{" "}
-                                        <span className="text-blue-300">
-                                            {selectedBlock.low_fee_per_kb}
-                                        </span>
-                                    </p>
-                                </div>
-                            </div>
-                        )}
-                    </CardContent>
-                </Card>
+        {/* Off-chain Bitcoin Data */}
+        {!loading && (
+          <Card className="mt-8 bg-gray-800 border-gray-700 text-gray-200">
+            <CardHeader>
+              <CardTitle className="text-xl text-blue-400">Bitcoin Market Overview</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p>Market Cap: ${marketCap?.toLocaleString()}</p>
+              <p>24h Trading Volume: ${tradingVolume?.toLocaleString()}</p>
+              <p>24h Price Change: {priceChange24h?.toFixed(2)}%</p>
+              <p>7d Price Change: {priceChange7d?.toFixed(2)}%</p>
+              <p>Market Dominance: {marketDominance?.toFixed(2)}%</p>
+              <p>Circulating Supply: {circulatingSupply?.toLocaleString()}</p>
+              <p>All-Time High: ${allTimeHigh?.toLocaleString()}</p>
+            </CardContent>
+          </Card>
+        )}
 
-                {/* Transactions */}
-                <Card className="bg-gray-800 border-gray-700">
-                    <CardHeader>
-                        <CardTitle className="text-xl text-blue-400">
-                            Transactions
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="space-y-4">
-                            {mockBlocks && mockBlocks[0].transactions.map((transaction) => (
-                                <div
-                                    key={transaction.id}
-                                    className="border border-gray-700 rounded-lg p-4">
-                                    <div
-                                        className="flex justify-between items-center cursor-pointer"
-                                        onClick={() =>
-                                            toggleTransaction(transaction.id)
-                                        }>
-                                        <span className="font-mono text-sm text-green-400">
-                                            {transaction.id}
-                                        </span>
-                                        {expandedTransactions.includes(
-                                            transaction.id
-                                        ) ? (
-                                            <ChevronUp className="h-5 w-5 text-gray-400" />
-                                        ) : (
-                                            <ChevronDown className="h-5 w-5 text-gray-400" />
-                                        )}
-                                    </div>
-                                    {expandedTransactions.includes(
-                                        transaction.id
-                                    ) && (
-                                        <div className="mt-2 space-y-2 text-sm">
-                                            <p>
-                                                <strong className="text-gray-400">
-                                                    From:
-                                                </strong>{" "}
-                                                <span className="text-blue-300">
-                                                    {transaction.from}
-                                                </span>
-                                            </p>
-                                            <p>
-                                                <strong className="text-gray-400">
-                                                    To:
-                                                </strong>{" "}
-                                                <span className="text-blue-300">
-                                                    {transaction.to}
-                                                </span>
-                                            </p>
-                                            <p>
-                                                <strong className="text-gray-400">
-                                                    Amount:
-                                                </strong>{" "}
-                                                <span className="text-blue-300">
-                                                    {transaction.amount.toFixed(
-                                                        8
-                                                    )}{" "}
-                                                    BTC
-                                                </span>
-                                            </p>
-                                            <p>
-                                                <strong className="text-gray-400">
-                                                    Fee:
-                                                </strong>{" "}
-                                                <span className="text-blue-300">
-                                                    {transaction.fee.toFixed(8)}{" "}
-                                                    BTC
-                                                </span>
-                                            </p>
-                                        </div>
-                                    )}
-                                </div>
-                            ))}
-                        </div>
-                    </CardContent>
-                </Card>
-
-                {/* Bitcoin Price Charts */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <Card className="bg-gray-800 border-gray-700">
-                        <CardHeader>
-                            <CardTitle className="text-xl text-blue-400">
-                                Bitcoin Price History
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <ChartContainer
-                                config={{
-                                    price: {
-                                        label: "Price",
-                                        color: "hsl(var(--chart-1))",
-                                    },
-                                }}
-                                className="h-[300px]">
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <LineChart data={mockPriceChangeData}>
-                                        <XAxis
-                                            dataKey="time"
-                                            stroke="#888888"
-                                            fontSize={12}
-                                            tickLine={false}
-                                            axisLine={false}
-                                        />
-                                        <YAxis
-                                            stroke="#888888"
-                                            fontSize={12}
-                                            tickLine={false}
-                                            axisLine={false}
-                                            tickFormatter={(value) =>
-                                                `$${value.toLocaleString()}`
-                                            }
-                                        />
-                                        <ChartTooltip
-                                            content={<ChartTooltipContent />}
-                                        />
-                                        <Line
-                                            type="monotone"
-                                            dataKey="price"
-                                            stroke="var(--color-price)"
-                                            strokeWidth={2}
-                                            dot={false}
-                                        />
-                                    </LineChart>
-                                </ResponsiveContainer>
-                            </ChartContainer>
-                        </CardContent>
-                    </Card>
-
-                    <Card className="bg-gray-800 border-gray-700">
-                        <CardHeader>
-                            <CardTitle className="text-xl text-blue-400">
-                                Bitcoin Price Change (%)
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <ChartContainer
-                                config={{
-                                    change: {
-                                        label: "Change (%)",
-                                        color: "hsl(var(--chart-2))",
-                                    },
-                                }}
-                                className="h-[300px]">
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <LineChart data={mockPriceChangeData}>
-                                        <XAxis
-                                            dataKey="time"
-                                            stroke="#888888"
-                                            fontSize={12}
-                                            tickLine={false}
-                                            axisLine={false}
-                                        />
-                                        <YAxis
-                                            stroke="#888888"
-                                            fontSize={12}
-                                            tickLine={false}
-                                            axisLine={false}
-                                            tickFormatter={(value) =>
-                                                `${value.toFixed(2)}%`
-                                            }
-                                        />
-                                        <ChartTooltip
-                                            content={<ChartTooltipContent />}
-                                        />
-                                        <Line
-                                            type="monotone"
-                                            dataKey="change"
-                                            stroke="var(--color-change)"
-                                            strokeWidth={2}
-                                            dot={false}
-                                        />
-                                    </LineChart>
-                                </ResponsiveContainer>
-                            </ChartContainer>
-                        </CardContent>
-                    </Card>
-                </div>
-
-                {/* Additional Stats */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <Card className="bg-gray-800 border-gray-700">
-                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                            <CardTitle className="text-sm font-medium text-gray-400">
-                                Total Blocks
-                            </CardTitle>
-                            <Database className="h-4 w-4 text-blue-400" />
-                        </CardHeader>
-                        <CardContent>
-                            <div className="text-2xl font-bold text-blue-300">
-                                {parseInt(
-                                    mockBlocks[0].height
-                                ).toLocaleString()}
-                            </div>
-                        </CardContent>
-                    </Card>
-                    <Card className="bg-gray-800 border-gray-700">
-                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                            <CardTitle className="text-sm font-medium text-gray-400">
-                                Network Peers
-                            </CardTitle>
-                            <Users className="h-4 w-4 text-blue-400" />
-                        </CardHeader>
-                        <CardContent>
-                            <div className="text-2xl font-bold text-blue-300">
-                                {selectedBlock && parseInt(
-                                    selectedBlock.peer_count
-                                ).toLocaleString()}
-                            </div>
-                        </CardContent>
-                    </Card>
-                    <Card className="bg-gray-800 border-gray-700">
-                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                            <CardTitle className="text-sm font-medium text-gray-400">
-                                Latest Price
-                            </CardTitle>
-                            <Link className="h-4 w-4 text-blue-400" />
-                        </CardHeader>
-                        <CardContent>
-                            <div className="text-2xl font-bold text-blue-300">
-                                ${selectedBlock && selectedBlock.price.toFixed(2)}
-                            </div>
-                        </CardContent>
-                    </Card>
-                    <Card className="bg-gray-800 border-gray-700">
-                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                            <CardTitle className="text-sm font-medium text-gray-400">
-                                Block Time
-                            </CardTitle>
-                            <Clock className="h-4 w-4 text-blue-400" />
-                        </CardHeader>
-                        <CardContent>
-                            <div className="text-2xl font-bold text-blue-300">
-                                {selectedBlock && new Date(
-                                    selectedBlock.time
-                                ).toLocaleTimeString()}
-                            </div>
-                        </CardContent>
-                    </Card>
-                </div>
-            </main>
-        </div>
-    );
+        {/* Chart Section */}
+        <Card className="mt-8 bg-gray-800 border-gray-700">
+          <CardHeader>
+            <CardTitle className="text-xl text-blue-400">Bitcoin Price (Last 30 Days)</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {chartData ? (
+              <Line
+                data={chartData}
+                options={{
+                  responsive: true,
+                  plugins: {
+                    legend: {
+                      display: true,
+                      position: "top",
+                    },
+                  },
+                }}
+              />
+            ) : (
+              <p>Loading chart data...</p>
+            )}
+          </CardContent>
+        </Card>
+      </main>
+    </div>
+  );
 }

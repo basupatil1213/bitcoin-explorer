@@ -1,14 +1,8 @@
-#[macro_use]
-extern crate dotenv_codegen;
-
 use reqwest::Error as ReqwestError;
 use serde::{Deserialize};
 use tokio_postgres::{Client, NoTls, Error as PgError};
 use chrono::{DateTime, Utc};
 use std::time::Duration;
-use dotenv::dotenv;
-
-
 
 #[derive(Deserialize, Debug)]
 struct BlockchainApiResponse {
@@ -52,7 +46,7 @@ async fn fetch_bitcoin_price() -> Result<PriceData, ReqwestError> {
 
 async fn create_table_if_not_exists(client: &Client) -> Result<(), PgError> {
     client.execute(
-        "CREATE TABLE IF NOT EXISTS blocks (
+        "CREATE TABLE IF NOT EXISTS block_detail (
             id SERIAL PRIMARY KEY,
             height BIGINT NOT NULL,
             hash TEXT NOT NULL,
@@ -67,8 +61,6 @@ async fn create_table_if_not_exists(client: &Client) -> Result<(), PgError> {
             low_fee_per_kb BIGINT NOT NULL,
             last_fork_height BIGINT NOT NULL,
             last_fork_hash TEXT NOT NULL,
-            price DOUBLE PRECISION,
-            volume_24h DOUBLE PRECISION,
             timestamp TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
         )",
         &[],
@@ -78,45 +70,32 @@ async fn create_table_if_not_exists(client: &Client) -> Result<(), PgError> {
 }
 
 async fn insert_bitcoin_data(client: &Client, block: &BlockchainApiResponse, price: &PriceData) -> Result<(), PgError> {
-    // Check if the block already exists
-    let exists: i64 = client.query_one(
-        "SELECT COUNT(*) FROM blocks WHERE height = $1 OR hash = $2",
-        &[&(block.height as i64), &block.hash],
-    ).await?.get(0);
-
-    if exists > 0 {
-        println!("Block already exists in the database.");
-        return Ok(()); // Exit if the block exists
-    }
-
     client.execute(
-        "INSERT INTO blocks (
+        "INSERT INTO block_detail (
             height, hash, time, latest_url, previous_hash, previous_url, 
             peer_count, unconfirmed_count, high_fee_per_kb, medium_fee_per_kb, 
-            low_fee_per_kb, last_fork_height, last_fork_hash, price, volume_24h
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)",
+            low_fee_per_kb, last_fork_height, last_fork_hash
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)",
         &[
             &(block.height as i64), &block.hash, &block.time, &block.latest_url, 
             &block.previous_hash, &block.previous_url, &block.peer_count, 
             &block.unconfirmed_count, &block.high_fee_per_kb, &block.medium_fee_per_kb, 
-            &block.low_fee_per_kb, &block.last_fork_height, &block.last_fork_hash, 
-            &price.usd, &price.usd_24h_vol
+            &block.low_fee_per_kb, &block.last_fork_height, &block.last_fork_hash
         ],
     ).await?;
 
-    Ok(()) // Ensure to return Ok(()) at the end
+    Ok(())
 }
 
 async fn add_missing_columns(client: &Client) -> Result<(), PgError> {
     let columns_to_check = [
         ("latest_url", "TEXT"),
         ("previous_url", "TEXT"),
-        // Add any other columns that might be missing
     ];
 
     for (column_name, column_type) in columns_to_check.iter() {
         let query = format!(
-            "ALTER TABLE blocks ADD COLUMN IF NOT EXISTS {} {}",
+            "ALTER TABLE block_detail ADD COLUMN IF NOT EXISTS {} {}",
             column_name, column_type
         );
         client.execute(&query, &[]).await?;
@@ -127,14 +106,8 @@ async fn add_missing_columns(client: &Client) -> Result<(), PgError> {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-
-    dotenv().ok();
-
     let blockchain_url = "https://api.blockcypher.com/v1/btc/main";
-
-    let connection_url = dotenv!("CONNECTION_STRING");
-
-    let (client, connection) = tokio_postgres::connect(connection_url, NoTls).await?;
+    let (client, connection) = tokio_postgres::connect("host=localhost port=5432 user=postgres password=postgres dbname=crypto_explore", NoTls).await?;
 
     tokio::spawn(async move {
         if let Err(e) = connection.await {
