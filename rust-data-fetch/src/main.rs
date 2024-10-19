@@ -20,6 +20,7 @@ struct BlockchainApiResponse {
     low_fee_per_kb: i64,
     last_fork_height: i64,
     last_fork_hash: String,
+
 }
 
 #[derive(Deserialize, Debug)]
@@ -61,7 +62,9 @@ async fn create_table_if_not_exists(client: &Client) -> Result<(), PgError> {
             low_fee_per_kb BIGINT NOT NULL,
             last_fork_height BIGINT NOT NULL,
             last_fork_hash TEXT NOT NULL,
-            timestamp TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+            timestamp TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+            price DOUBLE PRECISION,
+            volume_24h DOUBLE PRECISION
         )",
         &[],
     ).await?;
@@ -74,13 +77,13 @@ async fn insert_bitcoin_data(client: &Client, block: &BlockchainApiResponse, pri
         "INSERT INTO block_detail (
             height, hash, time, latest_url, previous_hash, previous_url, 
             peer_count, unconfirmed_count, high_fee_per_kb, medium_fee_per_kb, 
-            low_fee_per_kb, last_fork_height, last_fork_hash
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)",
+            low_fee_per_kb, last_fork_height, last_fork_hash, price, volume_24h
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)",
         &[
             &(block.height as i64), &block.hash, &block.time, &block.latest_url, 
             &block.previous_hash, &block.previous_url, &block.peer_count, 
             &block.unconfirmed_count, &block.high_fee_per_kb, &block.medium_fee_per_kb, 
-            &block.low_fee_per_kb, &block.last_fork_height, &block.last_fork_hash
+            &block.low_fee_per_kb, &block.last_fork_height, &block.last_fork_hash, &price.usd, &price.usd_24h_vol
         ],
     ).await?;
 
@@ -91,6 +94,8 @@ async fn add_missing_columns(client: &Client) -> Result<(), PgError> {
     let columns_to_check = [
         ("latest_url", "TEXT"),
         ("previous_url", "TEXT"),
+        ("price", "DOUBLE"),
+        ("volume_24h", "DOUBLE")
     ];
 
     for (column_name, column_type) in columns_to_check.iter() {

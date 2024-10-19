@@ -1,0 +1,71 @@
+name: Deploy to GCP
+
+on:
+  push:
+    branches:
+      - main  # Change this to your main branch
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v2
+        with:
+          node-version: '16'  # Match this to your Node.js version
+
+      - name: Build Web App
+        run: |
+          cd webapp
+          npm install
+          npm run build
+
+      - name: Build Rust Data Fetcher
+        run: |
+          cd rust-data-fetch
+          cargo build --release
+
+      - name: Configure Docker
+        run: |
+          echo "${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}" > $HOME/gcp-key.json
+          echo "${{ secrets.GCP_PROJECT_ID }}" | gcloud auth activate-service-account --key-file=$HOME/gcp-key.json
+          gcloud auth configure-docker
+
+      - name: Build Docker Images
+        run: |
+          docker build -t gcr.io/${{ secrets.GCP_PROJECT_ID }}/webapp ./webapp
+          docker build -t gcr.io/${{ secrets.GCP_PROJECT_ID }}/rust-data-fetch ./rust-data-fetch
+
+      - name: Push Docker Images
+        run: |
+          docker push gcr.io/${{ secrets.GCP_PROJECT_ID }}/webapp
+          docker push gcr.io/${{ secrets.GCP_PROJECT_ID }}/rust-data-fetch
+
+      - name: Deploy Web App to Cloud Run
+        run: |
+          gcloud run deploy webapp \
+            --image gcr.io/${{ secrets.GCP_PROJECT_ID }}/webapp \
+            --platform managed \
+            --region us-central1 \
+            --allow-unauthenticated \
+            --quiet
+
+      - name: Deploy Rust Data Fetcher to Cloud Run
+        run: |
+          gcloud run deploy rust-data-fetch \
+            --image gcr.io/${{ secrets.GCP_PROJECT_ID }}/rust-data-fetch \
+            --platform managed \
+            --region us-central1 \
+            --allow-unauthenticated \
+            --quiet
+
+      - name: Update Database Connection String
+        run: |
+          gcloud sql users set-password ${{ secrets.DATABASE_USER }} \
+            --instance=your-instance-name \
+            --password=${{ secrets.DATABASE_PASSWORD }} \
+            --quiet
