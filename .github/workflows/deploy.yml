@@ -73,6 +73,13 @@ jobs:
     needs: [build-rust, build-webapp]  # Ensure both images are built
 
     steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - id: 'auth'
+      uses: 'google-github-actions/auth@v2'
+      with:
+        credentials_json: '${{ secrets.GCP_CREDENTIALS }}'
     - name: Create VM instance if it doesn't exist
       run: |
         INSTANCE_NAME=${{secrets.GCP_INSTANCE_NAME}}
