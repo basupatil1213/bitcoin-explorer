@@ -41,7 +41,7 @@ jobs:
 
     - name: Build and Push Rust Docker Image
       run: |
-        docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/rust-data-fetch /bitcoin-explorer/rust-data-fetch/
+        docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/rust-data-fetch ./bitcoin-explorer/rust-data-fetch/
         docker tag ${{ secrets.DOCKERHUB_USERNAME }}/rust-data-fetch:latest ${{ secrets.DOCKERHUB_USERNAME }}/rust-data-fetch:latest
         docker push ${{ secrets.DOCKERHUB_USERNAME }}/rust-data-fetch:latest
 
@@ -62,7 +62,7 @@ jobs:
         
     - name: Build and Push Next.js Docker Image
       run: |
-        docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/bitcoin-explorer-webapp /bitcoin-exlporer/webapp/
+        docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/bitcoin-explorer-webapp ./bitcoin-exlporer/webapp/
         docker tag ${{ secrets.DOCKERHUB_USERNAME }}/bitcoin-explorer-webapp:latest ${{ secrets.DOCKERHUB_USERNAME }}/bitcoin-explorer-webapp:latest
         docker push ${{ secrets.DOCKERHUB_USERNAME }}/bitcoin-explorer-webapp:latest
 
