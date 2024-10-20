@@ -7,7 +7,7 @@ import pool from "@/lib/dbConnect";
 
 
 // get block details
-export async function getBlockDetails() {
+export async function GET() {
     let blockHeight;
     try {
         await pool.connect();
@@ -23,8 +23,3 @@ export async function getBlockDetails() {
     
     return NextResponse.json({ message: blockHeight.rows }, { status: 200 });
 }
-
-
-
-
-export { getBlockDetails as GET };
