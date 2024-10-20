@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 
 // get block details
-export async function getBlockDetails(req: NextRequest) {
+export async function GET(req: NextRequest) {
     // Use query parameters to get the hash
     const url = new URL(req.url); // Changed from req.body to req.query
 
@@ -32,8 +32,3 @@ export async function getBlockDetails(req: NextRequest) {
         return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     }
 }
-
-
-
-
-export { getBlockDetails as GET };
