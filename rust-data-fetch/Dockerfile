@@ -9,17 +9,21 @@ COPY . .
 # Build the Rust project in release mode
 RUN cargo build --release
 
+# Step 2: Create a new lightweight image
 FROM debian:buster-slim
 
-# Install necessary tools for networking
-RUN apt-get update && apt-get install -y iputils-ping netcat-openbsd && rm -rf /var/lib/apt/lists/*
+# Install OpenSSL and necessary tools for networking
+RUN apt-get update && apt-get install -y \
+    libssl1.1 \
+    iputils-ping \
+    netcat-openbsd \
+    && rm -rf /var/lib/apt/lists/*
 
 # Copy the compiled binary from the builder stage
 COPY --from=builder /usr/src/rust-data-fetch/target/release/rust-data-fetch /usr/local/bin/rust-data-fetch
 
 # Expose any necessary ports (if needed)
-EXPOSE 8080  
-# Modify if your Rust app listens on a different port
+EXPOSE 8080 
 
 # Run the Rust app
 CMD ["rust-data-fetch"]
