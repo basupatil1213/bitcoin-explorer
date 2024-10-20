@@ -140,6 +140,28 @@ export default function BlockchainExplorer() {
     }
   };
 
+  const fetchBlockHeight = () => {
+    fetch("http://localhost:3000/api/blocks")
+      .then((response) => response.json())
+      .then((data) => {
+        setRecentBlocks(data.message);
+      })
+      .catch((error) => {
+        console.error("Error fetching blocks:", error);
+      });
+  };
+
+  useEffect(() => {
+    // Fetch data immediately on component mount
+    fetchBlockHeight();
+
+    // Set up interval to fetch data every 4 minutes (240,000 milliseconds)
+    const intervalId = setInterval(fetchBlockHeight, 240000);
+
+    // Clean up interval on component unmount
+    return () => clearInterval(intervalId);
+  }, []);
+
   useEffect(() => {
     const fetchBlockHeight = () => {
       fetch("http://localhost:3000/api/blocks")
@@ -246,44 +268,43 @@ export default function BlockchainExplorer() {
       </header>
 
       <main className="container mx-auto px-4 py-8">
-      <ScrollArea className="w-full whitespace-nowrap rounded-md border border-gray-700">
-                            <div className="flex p-4">
-                                {recentBlocks &&
-                                    recentBlocks.map((block, index) => (
-                                        <React.Fragment key={block.id}>
-                                            <div
-                                                className="flex flex-col items-center cursor-pointer transition-transform hover:scale-105"
-                                                onClick={() =>
-                                                    handleBlockClick(block)
-                                                }>
-                                                <div
-                                                    className={`w-20 h-20 border-2 rounded-lg flex items-center justify-center ${
-                                                      selectedBlockDetails &&
-                                                      selectedBlockDetails.id ===
-                                                          block.id
-                                                          ? "bg-blue-500/30 border-blue-500"
-                                                          : "bg-blue-500/10 border-blue-500/50"
-                                                  }`}>
-                                                    <span className="text-sm font-medium text-blue-400">
-                                                        {block.height}
-                                                    </span>
-                                                </div>
-                                                <span className="mt-2 text-xs text-gray-400">
-                                                    {new Date(
-                                                        block.time
-                                                    ).toLocaleTimeString()}
-                                                </span>
-                                            </div>
-                                            {recentBlocks &&
-                                                index <
-                                                    recentBlocks.length - 1 && (
-                                                    <ArrowRight className="mx-2 self-center text-gray-600" />
-                                                )}
-                                        </React.Fragment>
-                                    ))}
-                            </div>
-                            <ScrollBar orientation="horizontal" />
-                        </ScrollArea>
+        <ScrollArea className="w-full whitespace-nowrap rounded-md border border-gray-700">
+          <div className="flex p-4">
+            {recentBlocks &&
+              recentBlocks.map((block, index) => (
+                <React.Fragment key={block.id}>
+                  <div
+                    className="flex flex-col items-center cursor-pointer transition-transform hover:scale-105"
+                    onClick={() =>
+                      handleBlockClick(block)
+                    }>
+                    <div
+                      className={`w-20 h-20 border-2 rounded-lg flex items-center justify-center ${selectedBlockDetails &&
+                          selectedBlockDetails.id ===
+                          block.id
+                          ? "bg-blue-500/30 border-blue-500"
+                          : "bg-blue-500/10 border-blue-500/50"
+                        }`}>
+                      <span className="text-sm font-medium text-blue-400">
+                        {block.height}
+                      </span>
+                    </div>
+                    <span className="mt-2 text-xs text-gray-400">
+                      {new Date(
+                        block.time
+                      ).toLocaleTimeString()}
+                    </span>
+                  </div>
+                  {recentBlocks &&
+                    index <
+                    recentBlocks.length - 1 && (
+                      <ArrowRight className="mx-2 self-center text-gray-600" />
+                    )}
+                </React.Fragment>
+              ))}
+          </div>
+          <ScrollBar orientation="horizontal" />
+        </ScrollArea>
 
         {/* Block Details Section */}
         {selectedBlockDetails && (
