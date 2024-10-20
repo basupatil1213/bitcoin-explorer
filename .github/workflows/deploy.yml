@@ -3,69 +3,115 @@ name: Deploy to GCP
 on:
   push:
     branches:
-      - main  # Change this to your main branch
+      - main
 
 jobs:
-  build-and-deploy:
+  connect-to-gcp:
+    name: Connect to GCP
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - id: 'auth'
+      uses: 'google-github-actions/auth@v2'
+      with:
+        credentials_json: '${{ secrets.GCP_CREDENTIALS }}'
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v2
-        with:
-          node-version: '16'  # Match this to your Node.js version
+    - name: Set up gcloud Cloud SDK environment
+      uses: google-github-actions/setup-gcloud@v2.1.1
+    
+    - name: 'Use gcloud CLI'
+      run: 'gcloud info'
+  
+  build-rust:
+    name: Build Rust Docker Image
+    runs-on: ubuntu-latest
 
-      - name: Build Web App
-        run: |
-          cd webapp
-          npm install
-          npm run build
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
 
-      - name: Build Rust Data Fetcher
-        run: |
-          cd rust-data-fetch
-          cargo build --release
+    - name: Login to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Configure Docker
-        run: |
-          echo "${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}" > $HOME/gcp-key.json
-          echo "${{ secrets.GCP_PROJECT_ID }}" | gcloud auth activate-service-account --key-file=$HOME/gcp-key.json
-          gcloud auth configure-docker
+    - name: Build and Push Rust Docker Image
+      run: |
+        docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/rust-data-fetch bitcoin-explorer/rust-data-fetch/
+        docker tag ${{ secrets.DOCKERHUB_USERNAME }}/rust-data-fetch:latest ${{ secrets.DOCKERHUB_USERNAME }}/rust-data-fetch:latest
+        docker push ${{ secrets.DOCKERHUB_USERNAME }}/rust-data-fetch:latest
 
-      - name: Build Docker Images
-        run: |
-          docker build -t gcr.io/${{ secrets.GCP_PROJECT_ID }}/webapp ./webapp
-          docker build -t gcr.io/${{ secrets.GCP_PROJECT_ID }}/rust-data-fetch ./rust-data-fetch
+  build-webapp:
+    name: Build Next.js Docker Image
+    runs-on: ubuntu-latest
+    needs: build-rust  # Build after Rust image
 
-      - name: Push Docker Images
-        run: |
-          docker push gcr.io/${{ secrets.GCP_PROJECT_ID }}/webapp
-          docker push gcr.io/${{ secrets.GCP_PROJECT_ID }}/rust-data-fetch
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+     
+    - name: Login to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+        
+    - name: Build and Push Next.js Docker Image
+      run: |
+        docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/bitcoin-explorer-webapp bitcoin-exlporer/webapp/
+        docker tag ${{ secrets.DOCKERHUB_USERNAME }}/bitcoin-explorer-webapp:latest ${{ secrets.DOCKERHUB_USERNAME }}/bitcoin-explorer-webapp:latest
+        docker push ${{ secrets.DOCKERHUB_USERNAME }}/bitcoin-explorer-webapp:latest
 
-      - name: Deploy Web App to Cloud Run
-        run: |
-          gcloud run deploy webapp \
-            --image gcr.io/${{ secrets.GCP_PROJECT_ID }}/webapp \
-            --platform managed \
-            --region us-central1 \
-            --allow-unauthenticated \
-            --quiet
+  deploy:
+    name: Deploy to GCP VM
+    runs-on: ubuntu-latest
+    needs: [build-rust, build-webapp]  # Ensure both images are built
 
-      - name: Deploy Rust Data Fetcher to Cloud Run
-        run: |
-          gcloud run deploy rust-data-fetch \
-            --image gcr.io/${{ secrets.GCP_PROJECT_ID }}/rust-data-fetch \
-            --platform managed \
-            --region us-central1 \
-            --allow-unauthenticated \
-            --quiet
+    steps:
+    - name: Create VM instance if it doesn't exist
+      run: |
+        INSTANCE_NAME=${{secrets.GCP_INSTANCE_NAME}}
+        ZONE=${{secrets.GCP_ZONE}}
+        MACHINE_TYPE="n1-standard-1"  # Specify your desired machine type
+        IMAGE_FAMILY="debian-11"  # Specify your desired image family
+        IMAGE_PROJECT="debian-cloud"  # Specify the project for the image family
 
-      - name: Update Database Connection String
-        run: |
-          gcloud sql users set-password ${{ secrets.DATABASE_USER }} \
-            --instance=your-instance-name \
-            --password=${{ secrets.DATABASE_PASSWORD }} \
-            --quiet
+        # Check if the VM instance exists
+        if ! gcloud compute instances describe $INSTANCE_NAME --zone $ZONE &>/dev/null; then
+          echo "Creating VM instance $INSTANCE_NAME..."
+          gcloud compute instances create $INSTANCE_NAME --zone $ZONE --machine-type $MACHINE_TYPE --image-family $IMAGE_FAMILY --image-project $IMAGE_PROJECT
+        else
+          echo "VM instance $INSTANCE_NAME already exists."
+        fi
+
+    - name: Deploy Rust application
+      run: |
+        # Define your Docker image
+        IMAGE="${{ secrets.DOCKERHUB_USERNAME }}/rust-data-fetch:latest"
+
+        # Connect to the VM and run the Docker container
+        gcloud compute ssh ${{ secrets.GCP_INSTANCE_NAME }} --zone ${{ secrets.GCP_ZONE }} --command "sudo docker run -d --restart always --name rust-data-fetch \
+          -e POSTGRES_HOST=${{secrets.GCP_SQL_HOST}} \
+          -e POSTGRES_DB= ${{secrets.POSTGRES_DB}} \
+          -e POSTGRES_USER=${{secrets.POSTGRES_USERNAME}} \
+          -e POSTGRES_PASSWORD=${{secrets.POSTGRES_PASSWORD}} \
+          -e POSTGRES_PORT=${{secrets.POSTGRES_PORT}} \
+          $IMAGE"
+
+    - name: Deploy Next.js application
+      run: |
+        # Define your Docker image
+        IMAGE="${{ secrets.DOCKERHUB_USERNAME }}/bitcoin-explorer-webapp:latest"
+
+        # Connect to the VM and run the Docker container
+        gcloud compute ssh ${{ secrets.GCP_INSTANCE_NAME }} --zone ${{ secrets.GCP_ZONE }} --command "sudo docker run -d --restart always -p 3000:3000 --name bitcoin-explorer-webapp \
+          -e DB_USER=${{secrets.POSTGRES_USERNAME}} \
+          -e DB_HOST=${{secrets.GCP_SQL_HOST}}
+          -e DB_NAME=${{secrets.POSTGRES_DB}} \
+          -e DB_PASSWORD=${{secrets.POSTGRES_PASSWORD}} \
+          -e DB_PORT=${{secrets.POSTGRES_PORT}} \
+          $IMAGE"
