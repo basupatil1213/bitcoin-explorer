@@ -3,6 +3,8 @@ use serde::{Deserialize};
 use tokio_postgres::{Client, NoTls, Error as PgError};
 use chrono::{DateTime, Utc};
 use std::time::Duration;
+use dotenv::dotenv;
+use std::env;
 
 #[derive(Deserialize, Debug)]
 struct BlockchainApiResponse {
@@ -89,7 +91,7 @@ async fn insert_bitcoin_data(client: &Client, block: &BlockchainApiResponse, pri
 
     Ok(())
 }
-
+    
 async fn add_missing_columns(client: &Client) -> Result<(), PgError> {
     let columns_to_check = [
         ("latest_url", "TEXT"),
@@ -111,8 +113,16 @@ async fn add_missing_columns(client: &Client) -> Result<(), PgError> {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    dotenv().ok();
+    let host = env::var("POSTGRES_HOST").expect("POSTGRES_HOST not set");
+    let dbname = env::var("POSTGRES_DB").expect("POSTGRES_DB not set");
+    let user = env::var("POSTGRES_USER").expect("POSTGRES_USER not set");
+    let password = env::var("POSTGRES_PASSWORD").expect("POSTGRES_PASSWORD not set");
+
+    let connection_string = format!("host={} dbname={} user={} password={}", host, dbname, user, password);
+    
     let blockchain_url = "https://api.blockcypher.com/v1/btc/main";
-    let (client, connection) = tokio_postgres::connect("host=localhost port=5432 user=postgres password=postgres dbname=crypto_explore", NoTls).await?;
+    let (client, connection) = tokio_postgres::connect(&connection_string, NoTls).await?;
 
     tokio::spawn(async move {
         if let Err(e) = connection.await {
