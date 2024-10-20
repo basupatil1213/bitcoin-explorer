@@ -9,7 +9,6 @@ COPY . .
 # Build the Rust project in release mode
 RUN cargo build --release
 
-# Step 2: Use a minimal base image for the final build
 FROM debian:buster-slim
 
 # Install necessary tools for networking
