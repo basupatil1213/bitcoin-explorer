@@ -82,20 +82,36 @@ jobs:
         credentials_json: '${{ secrets.GCP_CREDENTIALS }}'
     - name: Create VM instance if it doesn't exist
       run: |
-        INSTANCE_NAME=${{secrets.GCP_INSTANCE_NAME}}
-        ZONE=${{secrets.GCP_ZONE}}
+        INSTANCE_NAME=${{ secrets.GCP_INSTANCE_NAME }}
+        ZONE=${{ secrets.GCP_ZONE }}
         MACHINE_TYPE="n1-standard-1"  # Specify your desired machine type
         IMAGE_FAMILY="debian-11"  # Specify your desired image family
         IMAGE_PROJECT="debian-cloud"  # Specify the project for the image family
-
+    
         # Check if the VM instance exists
-        if ! gcloud compute instances describe $INSTANCE_NAME --zone $ZONE &>/dev/null; then
+        if ! gcloud compute instances describe "$INSTANCE_NAME" --zone "$ZONE" &>/dev/null; then
           echo "Creating VM instance $INSTANCE_NAME..."
-          gcloud compute instances create $INSTANCE_NAME --zone $ZONE --machine-type $MACHINE_TYPE --image-family $IMAGE_FAMILY --image-project $IMAGE_PROJECT
+          gcloud compute instances create "$INSTANCE_NAME" --zone "$ZONE" --machine-type "$MACHINE_TYPE" --image-family "$IMAGE_FAMILY" --image-project "$IMAGE_PROJECT"
         else
           echo "VM instance $INSTANCE_NAME already exists."
         fi
-
+    
+        # Connect to the VM and install Docker if it's not installed
+        gcloud compute ssh "$INSTANCE_NAME" --zone "$ZONE" --command "
+          if ! command -v docker &> /dev/null; then
+            echo 'Docker not found. Installing...'
+            sudo apt-get update &&
+            sudo apt-get install -y apt-transport-https ca-certificates curl &&
+            curl -fsSL https://download.docker.com/linux/debian/gpg | sudo apt-key add - &&
+            sudo add-apt-repository 'deb [arch=amd64] https://download.docker.com/linux/debian \$(lsb_release -cs) stable' &&
+            sudo apt-get update &&
+            sudo apt-get install -y docker-ce &&
+            echo 'Docker installed successfully.'
+          else
+            echo 'Docker is already installed.'
+          fi
+        "
+      
     - name: Deploy Rust application
       run: |
         # Define your Docker image
