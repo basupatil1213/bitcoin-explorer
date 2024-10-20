@@ -6,66 +6,66 @@ on:
       - main
 
 jobs:
-  # connect-to-gcp:
-  #   name: Connect to GCP
-  #   runs-on: ubuntu-latest
+  connect-to-gcp:
+    name: Connect to GCP
+    runs-on: ubuntu-latest
 
-  #   steps:
-  #   - name: Checkout repository
-  #     uses: actions/checkout@v4
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
     
-  #   - id: 'auth'
-  #     uses: 'google-github-actions/auth@v2'
-  #     with:
-  #       credentials_json: '${{ secrets.GCP_CREDENTIALS }}'
+    - id: 'auth'
+      uses: 'google-github-actions/auth@v2'
+      with:
+        credentials_json: '${{ secrets.GCP_CREDENTIALS }}'
 
-  #   - name: Set up gcloud Cloud SDK environment
-  #     uses: google-github-actions/setup-gcloud@v2.1.1
+    - name: Set up gcloud Cloud SDK environment
+      uses: google-github-actions/setup-gcloud@v2.1.1
     
-  #   - name: 'Use gcloud CLI'
-  #     run: 'gcloud info'
+    - name: 'Use gcloud CLI'
+      run: 'gcloud info'
   
-  # build-rust:
-  #   name: Build Rust Docker Image
-  #   runs-on: ubuntu-latest
+  build-rust:
+    name: Build Rust Docker Image
+    runs-on: ubuntu-latest
 
-  #   steps:
-  #   - name: Checkout repository
-  #     uses: actions/checkout@v4
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
 
-  #   - name: Login to Docker Hub
-  #     uses: docker/login-action@v3
-  #     with:
-  #       username: ${{ secrets.DOCKERHUB_USERNAME }}
-  #       password: ${{ secrets.DOCKERHUB_TOKEN }}
+    - name: Login to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-  #   - name: Build and Push Rust Docker Image
-  #     run: |
-  #       ls
-  #       docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/rust-data-fetch ./rust-data-fetch/
-  #       docker tag ${{ secrets.DOCKERHUB_USERNAME }}/rust-data-fetch:latest ${{ secrets.DOCKERHUB_USERNAME }}/rust-data-fetch:latest
-  #       docker push ${{ secrets.DOCKERHUB_USERNAME }}/rust-data-fetch:latest
+    - name: Build and Push Rust Docker Image
+      run: |
+        ls
+        docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/rust-data-fetch ./rust-data-fetch/
+        docker tag ${{ secrets.DOCKERHUB_USERNAME }}/rust-data-fetch:latest ${{ secrets.DOCKERHUB_USERNAME }}/rust-data-fetch:latest
+        docker push ${{ secrets.DOCKERHUB_USERNAME }}/rust-data-fetch:latest
 
-  # build-webapp:
-  #   name: Build Next.js Docker Image
-  #   runs-on: ubuntu-latest
-  #   needs: build-rust  # Build after Rust image
+  build-webapp:
+    name: Build Next.js Docker Image
+    runs-on: ubuntu-latest
+    needs: build-rust  # Build after Rust image
 
-  #   steps:
-  #   - name: Checkout repository
-  #     uses: actions/checkout@v4
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
      
-  #   - name: Login to Docker Hub
-  #     uses: docker/login-action@v3
-  #     with:
-  #       username: ${{ secrets.DOCKERHUB_USERNAME }}
-  #       password: ${{ secrets.DOCKERHUB_TOKEN }}
+    - name: Login to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
         
-  #   - name: Build and Push Next.js Docker Image
-  #     run: |
-  #       docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/bitcoin-explorer-webapp ./webapp/
-  #       docker tag ${{ secrets.DOCKERHUB_USERNAME }}/bitcoin-explorer-webapp:latest ${{ secrets.DOCKERHUB_USERNAME }}/bitcoin-explorer-webapp:latest
-  #       docker push ${{ secrets.DOCKERHUB_USERNAME }}/bitcoin-explorer-webapp:latest
+    - name: Build and Push Next.js Docker Image
+      run: |
+        docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/bitcoin-explorer-webapp ./webapp/
+        docker tag ${{ secrets.DOCKERHUB_USERNAME }}/bitcoin-explorer-webapp:latest ${{ secrets.DOCKERHUB_USERNAME }}/bitcoin-explorer-webapp:latest
+        docker push ${{ secrets.DOCKERHUB_USERNAME }}/bitcoin-explorer-webapp:latest
 
   deploy:
     name: Deploy to GCP VM
