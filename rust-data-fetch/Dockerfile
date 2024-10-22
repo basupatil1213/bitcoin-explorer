@@ -14,7 +14,7 @@ FROM debian:buster-slim
 
 # Install OpenSSL and necessary tools for networking
 RUN apt-get update && apt-get install -y \
-    libssl1.1 \
+    libssl \
     iputils-ping \
     netcat-openbsd \
     && rm -rf /var/lib/apt/lists/*
