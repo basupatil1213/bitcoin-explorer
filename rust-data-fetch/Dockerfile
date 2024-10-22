@@ -10,7 +10,7 @@ COPY . .
 RUN cargo build --release
 
 # Step 2: Create a new lightweight image
-FROM debian:buster-slim
+FROM debian:bullseye-slim
 
 # Install OpenSSL and necessary tools for networking
 RUN apt-get update && apt-get install -y \
