@@ -110,7 +110,7 @@ export default function BlockchainExplorer() {
 
   const [darkMode, setDarkMode] = useState<boolean>(true);
 
-  const base_url = process.env.ENVIROMENT === "production" ? `http://host.docker.internal:3000` : "http://localhost:3000";
+  const base_url = `http://host.docker.internal:3000`;
 
   const handleBlockClick = (block: BlockData) => {
     setSelectedBlock(block.hash);
