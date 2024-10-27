@@ -67,84 +67,78 @@ jobs:
         docker tag ${{ secrets.DOCKERHUB_USERNAME }}/bitcoin-explorer-webapp:latest ${{ secrets.DOCKERHUB_USERNAME }}/bitcoin-explorer-webapp:latest
         docker push ${{ secrets.DOCKERHUB_USERNAME }}/bitcoin-explorer-webapp:latest
 
-  deploy:
-    name: Deploy to GCP VM
-    runs-on: ubuntu-latest
-    needs: [build-rust, build-webapp]
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - id: 'auth'
-        uses: 'google-github-actions/auth@v2'
-        with:
-          credentials_json: '${{ secrets.GCP_CREDENTIALS }}'
-
-      - name: Create VM instance if it doesn't exist
-        run: |
-          INSTANCE_NAME=${{ secrets.GCP_INSTANCE_NAME }}
-          ZONE=${{ secrets.GCP_ZONE }}
-          MACHINE_TYPE="n1-standard-1"  # Specify your desired machine type
-          IMAGE_FAMILY="debian-11"  # Specify your desired image family
-          IMAGE_PROJECT="debian-cloud"  # Specify the project for the image family
-
-          # Check if the VM instance exists
-          if ! gcloud compute instances describe "$INSTANCE_NAME" --zone "$ZONE" &>/dev/null; then
-            echo "Creating VM instance $INSTANCE_NAME..."
-            gcloud compute instances create "$INSTANCE_NAME" --zone "$ZONE" --machine-type "$MACHINE_TYPE" --image-family "$IMAGE_FAMILY" --image-project "$IMAGE_PROJECT"
-          else
-            echo "VM instance $INSTANCE_NAME already exists."
-          fi
-
-          # Connect to the VM and install Docker if it's not installed
-          gcloud compute ssh "$INSTANCE_NAME" --zone "$ZONE" --command "
-            if ! command -v docker &> /dev/null; then
-              echo 'Docker not found. Installing...'
-              
-              # Download the installation script
-              curl -fsSL https://get.docker.com -o get-docker.sh
-
-              # Run the installation script
-              sudo sh ./get-docker.sh
-
-              echo 'Docker installed successfully.'
-            else
-              echo 'Docker is already installed.'
-            fi
-          "
-      - name: Login to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Deploy Rust application
-        run: |
-          # Define your Docker image
-          IMAGE="${{ secrets.DOCKERHUB_USERNAME }}/rust-data-fetch:latest"
-
-          # Connect to the VM and run the Docker container
-          gcloud compute ssh "${{ secrets.GCP_INSTANCE_NAME }}" --zone "${{ secrets.GCP_ZONE }}" --command "sudo docker run -d --restart always --name rust-data-fetch \
-            -e POSTGRES_HOST=${{secrets.GCP_SQL_HOST}} \
-            -e POSTGRES_DB=${{secrets.POSTGRES_DB}} \
-            -e POSTGRES_USER=${{secrets.POSTGRES_USERNAME}} \
-            -e POSTGRES_PASSWORD=${{secrets.POSTGRES_PASSWORD}} \
-            -e POSTGRES_PORT=${{secrets.POSTGRES_PORT}} \
-            $IMAGE"
-
-      - name: Deploy Next.js application
-        run: |
-          # Define your Docker image
-          IMAGE="${{ secrets.DOCKERHUB_USERNAME }}/bitcoin-explorer-webapp:latest"
-
-          # Connect to the VM and run the Docker container
-          gcloud compute ssh "${{ secrets.GCP_INSTANCE_NAME }}" --zone "${{ secrets.GCP_ZONE }}" --command "sudo docker run -d --restart always -p 3000:3000 --name bitcoin-explorer-webapp \
-            -e DB_USER=${{secrets.POSTGRES_USERNAME}} \
-            -e DB_HOST=${{secrets.GCP_SQL_HOST}} \
-            -e DB_NAME=${{secrets.POSTGRES_DB}} \
-            -e DB_PASSWORD=${{secrets.POSTGRES_PASSWORD}} \
-            -e DB_PORT=${{secrets.POSTGRES_PORT}} \
-            -e WEBAPP_HOST=${{secrets.WEBAPP_HOST}} \
-            -e ENVIROMENT=${{secrets.ENVIROMENT}} \
-            $IMAGE"
+        deploy:
+          name: Deploy to GCP VM
+          runs-on: ubuntu-latest
+          needs: [build-rust, build-webapp]
+          steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+      
+            - id: 'auth'
+              uses: 'google-github-actions/auth@v2'
+              with:
+                credentials_json: '${{ secrets.GCP_CREDENTIALS }}'
+      
+            - name: Create VM instance if it doesn't exist
+              id: create_vm
+              run: |
+                INSTANCE_NAME=${{ secrets.GCP_INSTANCE_NAME }}
+                ZONE=${{ secrets.GCP_ZONE }}
+                MACHINE_TYPE="n1-standard-1"  # Specify your desired machine type
+                IMAGE_FAMILY="debian-11"  # Specify your desired image family
+                IMAGE_PROJECT="debian-cloud"  # Specify the project for the image family
+      
+                # Check if the VM instance exists
+                if ! gcloud compute instances describe "$INSTANCE_NAME" --zone "$ZONE" &>/dev/null; then
+                  echo "Creating VM instance $INSTANCE_NAME..."
+                  gcloud compute instances create "$INSTANCE_NAME" --zone "$ZONE" --machine-type "$MACHINE_TYPE" --image-family "$IMAGE_FAMILY" --image-project "$IMAGE_PROJECT"
+                else
+                  echo "VM instance $INSTANCE_NAME already exists."
+                fi
+      
+                # Get the external IP of the VM
+                VM_IP=$(gcloud compute instances describe "$INSTANCE_NAME" --zone "$ZONE" --format='get(networkInterfaces[0].accessConfigs[0].natIP)')
+                echo "VM_IP=$VM_IP" >> $GITHUB_ENV
+      
+                # Connect to the VM and install Docker if it's not installed
+                gcloud compute ssh "$INSTANCE_NAME" --zone "$ZONE" --command "
+                  if ! command -v docker &> /dev/null; then
+                    echo 'Docker not found. Installing...'
+                    curl -fsSL https://get.docker.com -o get-docker.sh
+                    sudo sh ./get-docker.sh
+                    echo 'Docker installed successfully.'
+                  else
+                    echo 'Docker is already installed.'
+                  fi
+                "
+            - name: Login to Docker Hub
+              uses: docker/login-action@v3
+              with:
+                username: ${{ secrets.DOCKERHUB_USERNAME }}
+                password: ${{ secrets.DOCKERHUB_TOKEN }}
+      
+            - name: Deploy Rust application
+              run: |
+                IMAGE="${{ secrets.DOCKERHUB_USERNAME }}/rust-data-fetch:latest"
+                gcloud compute ssh "${{ secrets.GCP_INSTANCE_NAME }}" --zone "${{ secrets.GCP_ZONE }}" --command "sudo docker run -d --restart always --name rust-data-fetch \
+                  -e POSTGRES_HOST=${{ secrets.GCP_SQL_HOST }} \
+                  -e POSTGRES_DB=${{ secrets.POSTGRES_DB }} \
+                  -e POSTGRES_USER=${{ secrets.POSTGRES_USERNAME }} \
+                  -e POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }} \
+                  -e POSTGRES_PORT=${{ secrets.POSTGRES_PORT }} \
+                  $IMAGE"
+      
+            - name: Deploy Next.js application
+              run: |
+                IMAGE="${{ secrets.DOCKERHUB_USERNAME }}/bitcoin-explorer-webapp:latest"
+                gcloud compute ssh "${{ secrets.GCP_INSTANCE_NAME }}" --zone "${{ secrets.GCP_ZONE }}" --command "sudo docker run -d --restart always -p 3000:3000 --name bitcoin-explorer-webapp \
+                  -e DB_USER=${{ secrets.POSTGRES_USERNAME }} \
+                  -e DB_HOST=${{ secrets.GCP_SQL_HOST }} \
+                  -e DB_NAME=${{ secrets.POSTGRES_DB }} \
+                  -e DB_PASSWORD=${{ secrets.POSTGRES_PASSWORD }} \
+                  -e DB_PORT=${{ secrets.POSTGRES_PORT }} \
+                  -e WEBAPP_HOST=${{ env.VM_IP }} \
+                  $IMAGE"
+      
 
