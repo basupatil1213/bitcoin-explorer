@@ -100,6 +100,8 @@ jobs:
           # Get the external IP of the VM
           VM_IP=$(gcloud compute instances describe "$INSTANCE_NAME" --zone "$ZONE" --format='get(networkInterfaces[0].accessConfigs[0].natIP)')
           echo "VM_IP=$VM_IP" >> $GITHUB_ENV
+          #print the IP address
+          echo "VM_IP=$VM_IP"
 
           # Connect to the VM and install Docker if it's not installed
           gcloud compute ssh "$INSTANCE_NAME" --zone "$ZONE" --command "
@@ -138,7 +140,7 @@ jobs:
             -e DB_NAME=${{ secrets.POSTGRES_DB }} \
             -e DB_PASSWORD=${{ secrets.POSTGRES_PASSWORD }} \
             -e DB_PORT=${{ secrets.POSTGRES_PORT }} \
-            -e WEBAPP_HOST=${{ env.VM_IP }} \
+            -e NEXT_PUBLIC_WEBAPP_HOST=${{ env.VM_IP }} \
             $IMAGE"
       
 
