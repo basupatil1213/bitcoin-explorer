@@ -37,17 +37,20 @@ struct PriceData {
 }
 
 async fn fetch_bitcoin_data(url: &str) -> Result<BlockchainApiResponse, ReqwestError> {
+    print!("fetch_bitcoin_data: Fetching data from: {}", url);
     let response = reqwest::get(url).await?.json::<BlockchainApiResponse>().await?;
     Ok(response)
 }
 
 async fn fetch_bitcoin_price() -> Result<PriceData, ReqwestError> {
+    print!("fetch_bitcoin_price: Fetching data from: https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_24hr_vol=true");
     let url = "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_24hr_vol=true";
     let response = reqwest::get(url).await?.json::<PriceApiResponse>().await?;
     Ok(response.bitcoin)
 }
 
 async fn create_table_if_not_exists(client: &Client) -> Result<(), PgError> {
+    print!("create_table_if_not_exists: Creating table if it doesn't exist");
     client.execute(
         "CREATE TABLE IF NOT EXISTS block_detail (
             id SERIAL PRIMARY KEY,
@@ -75,6 +78,7 @@ async fn create_table_if_not_exists(client: &Client) -> Result<(), PgError> {
 }
 
 async fn insert_bitcoin_data(client: &Client, block: &BlockchainApiResponse, price: &PriceData) -> Result<(), PgError> {
+    print!("insert_bitcoin_data: Inserting data into the database");
     client.execute(
         "INSERT INTO block_detail (
             height, hash, time, latest_url, previous_hash, previous_url, 
