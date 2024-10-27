@@ -152,6 +152,10 @@ export default function BlockchainExplorer() {
   };
 
   useEffect(() => {
+    console.log("NEXT_PUBLIC_WEBAPP_HOST:", process.env.NEXT_PUBLIC_WEBAPP_HOST);
+  })
+
+  useEffect(() => {
     // Fetch data immediately on component mount
     fetchBlockHeight();
 
@@ -163,6 +167,7 @@ export default function BlockchainExplorer() {
   }, []);
 
   useEffect(() => {
+    console.log(` environment host: ${process.env.NEXT_PUBLIC_WEBAPP_HOST}`)
     const fetchBlockHeight = () => {
       fetch(`http://${process.env.NEXT_PUBLIC_WEBAPP_HOST}:3000/api/blocks`)
         .then((response) => response.json())

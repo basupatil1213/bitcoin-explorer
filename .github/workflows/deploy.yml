@@ -141,6 +141,6 @@ jobs:
             -e DB_PASSWORD=${{ secrets.POSTGRES_PASSWORD }} \
             -e DB_PORT=${{ secrets.POSTGRES_PORT }} \
             -e NEXT_PUBLIC_WEBAPP_HOST=${{ env.VM_IP }} \
-            $IMAGE"
+            $IMAGE "
       
 
