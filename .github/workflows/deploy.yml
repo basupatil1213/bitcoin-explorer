@@ -103,6 +103,8 @@ jobs:
           echo "VM_IP=$VM_IP" >> $GITHUB_ENV
           #print the IP address
           echo "VM_IP=$VM_IP"
+          # pass the vm name to env
+          echo "GCP_INSTANCE_NAME=$INSTANCE_NAME" >> $GITHUB_ENV
 
           # Connect to the VM and install Docker if it's not installed
           gcloud compute ssh "$INSTANCE_NAME" --zone "$ZONE" --command "
@@ -124,7 +126,7 @@ jobs:
       - name: Deploy Rust application
         run: |
           IMAGE="${{ secrets.DOCKERHUB_USERNAME }}/rust-data-fetch:latest"
-          gcloud compute ssh "${{ secrets.GCP_INSTANCE_NAME }}" --zone "${{ secrets.GCP_ZONE }}" --command "sudo docker run -d --restart always --name rust-data-fetch \
+          gcloud compute ssh "${{ env.GCP_INSTANCE_NAME }}" --zone "${{ secrets.GCP_ZONE }}" --command "sudo docker run -d --restart always --name rust-data-fetch \
             -e POSTGRES_HOST=${{ secrets.GCP_SQL_HOST }} \
             -e POSTGRES_DB=${{ secrets.POSTGRES_DB }} \
             -e POSTGRES_USER=${{ secrets.POSTGRES_USERNAME }} \
@@ -135,7 +137,7 @@ jobs:
       - name: Deploy Next.js application
         run: |
           IMAGE="${{ secrets.DOCKERHUB_USERNAME }}/bitcoin-explorer-webapp:latest"
-          gcloud compute ssh "${{ secrets.GCP_INSTANCE_NAME }}" --zone "${{ secrets.GCP_ZONE }}" --command "sudo docker run -d --restart always -p 3000:3000 --name bitcoin-explorer-webapp \
+          gcloud compute ssh "${{ env.GCP_INSTANCE_NAME }}" --zone "${{ secrets.GCP_ZONE }}" --command "sudo docker run -d --restart always -p 3000:3000 --name bitcoin-explorer-webapp \
             -e DB_USER=${{ secrets.POSTGRES_USERNAME }} \
             -e DB_HOST=${{ secrets.GCP_SQL_HOST }} \
             -e DB_NAME=${{ secrets.POSTGRES_DB }} \
