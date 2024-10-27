@@ -83,7 +83,8 @@ jobs:
       - name: Create VM instance if it doesn't exist
         id: create_vm
         run: |
-          INSTANCE_NAME=${{ secrets.GCP_INSTANCE_NAME }}
+          TIMESTAMP=$(date +%Y%m%d%H%M%S)
+          INSTANCE_NAME="${{ secrets.GCP_INSTANCE_NAME }}-$TIMESTAMP"
           ZONE=${{ secrets.GCP_ZONE }}
           MACHINE_TYPE="n1-standard-1"  # Specify your desired machine type
           IMAGE_FAMILY="debian-11"  # Specify your desired image family
