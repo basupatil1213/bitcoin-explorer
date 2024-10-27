@@ -110,6 +110,8 @@ export default function BlockchainExplorer() {
 
   const [darkMode, setDarkMode] = useState<boolean>(true);
 
+  const base_url = process.env.ENVIROMENT === "production" ? `http://host.docker.internal:3000` : "http://localhost:3000";
+
   const handleBlockClick = (block: BlockData) => {
     setSelectedBlock(block.hash);
     if (selectedBlock != undefined) {
@@ -120,7 +122,7 @@ export default function BlockchainExplorer() {
   const fetchBlockDetails = async (hash: string) => {
     try {
       const response = await fetch(
-        `http://${process.env.WEBAPP_HOST}:3000/api/blocks/block?hash=${encodeURIComponent(
+        `http://${base_url}/api/blocks/block?hash=${encodeURIComponent(
           hash
         )}`,
         {
@@ -141,7 +143,7 @@ export default function BlockchainExplorer() {
   };
 
   const fetchBlockHeight = () => {
-    fetch(`http://${process.env.WEBAPP_HOST}:3000/api/blocks`)
+    fetch(`http://${base_url}/api/blocks`)
       .then((response) => response.json())
       .then((data) => {
         setRecentBlocks(data.message);
@@ -164,7 +166,7 @@ export default function BlockchainExplorer() {
 
   useEffect(() => {
     const fetchBlockHeight = () => {
-      fetch(`http://${process.env.WEBAPP_HOST}:3000/api/blocks`)
+      fetch(`http://${base_url}/api/blocks`)
         .then((response) => response.json())
         .then((data) => {
           setRecentBlocks(data.message);
