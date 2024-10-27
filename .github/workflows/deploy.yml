@@ -70,6 +70,7 @@ jobs:
   deploy:
     name: Deploy to GCP VM
     runs-on: ubuntu-latest
+    needs: [build-rust, build-webapp]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
