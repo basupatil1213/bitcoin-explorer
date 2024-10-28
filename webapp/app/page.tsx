@@ -120,7 +120,7 @@ export default function BlockchainExplorer() {
   const fetchBlockDetails = async (hash: string) => {
     try {
       const response = await fetch(
-        `http://${process.env.NEXT_PUBLIC_WEBAPP_HOST}:3000/api/blocks/block?hash=${encodeURIComponent(
+        `/api/blocks/block?hash=${encodeURIComponent(
           hash
         )}`,
         {
@@ -141,7 +141,7 @@ export default function BlockchainExplorer() {
   };
 
   const fetchBlockHeight = () => {
-    fetch(`http://${process.env.NEXT_PUBLIC_WEBAPP_HOST}:3000/api/blocks`)
+    fetch(`/api/blocks`)
       .then((response) => response.json())
       .then((data) => {
         setRecentBlocks(data.message);
@@ -169,7 +169,7 @@ export default function BlockchainExplorer() {
   useEffect(() => {
     console.log(` environment host: ${process.env.NEXT_PUBLIC_WEBAPP_HOST}`)
     const fetchBlockHeight = () => {
-      fetch(`http://${process.env.NEXT_PUBLIC_WEBAPP_HOST}:3000/api/blocks`)
+      fetch(`/api/blocks`)
         .then((response) => response.json())
         .then((data) => {
           setRecentBlocks(data.message);
