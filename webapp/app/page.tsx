@@ -233,6 +233,15 @@ export default function BlockchainExplorer() {
 
     fetchBlockHeight();
     fetchCoinData();
+
+    const intervalId = setInterval(() => {
+      fetchBlockHeight();
+      fetchCoinData();
+    }, 240000);
+
+    
+    return () => clearInterval(intervalId);
+
   }, []);
 
   useEffect(() => {
@@ -285,10 +294,10 @@ export default function BlockchainExplorer() {
                     }>
                     <div
                       className={`w-20 h-20 border-2 rounded-lg flex items-center justify-center ${selectedBlockDetails &&
-                          selectedBlockDetails.id ===
-                          block.id
-                          ? "bg-blue-500/30 border-blue-500"
-                          : "bg-blue-500/10 border-blue-500/50"
+                        selectedBlockDetails.id ===
+                        block.id
+                        ? "bg-blue-500/30 border-blue-500"
+                        : "bg-blue-500/10 border-blue-500/50"
                         }`}>
                       <span className="text-sm font-medium text-blue-400">
                         {block.height}
